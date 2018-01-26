@@ -4,3 +4,20 @@ version = "0.1.0"
 authors = ["Glyn Normington <gnormington@pivotal.io>"]
 
 [dependencies]
+rukafka = { path = "../rukafka" }
+# basic dependencies from echo server before
+futures = "0.1"
+tokio-proto = "0.1"
+tokio-service = "0.1"
+
+# our toy HTTP implementation
+tokio-minihttp = { git = "https://github.com/tokio-rs/tokio-minihttp" }
+
+# json
+serde_derive = "1.0"
+serde = "1.0"
+serde_json = "1.0"
+
+# misc support for thread pools, random numbers
+futures-cpupool = "0.1"
+rand = "0.3"
