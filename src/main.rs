@@ -18,9 +18,7 @@ use rand::Rng;
 use tokio_minihttp::{Request, Response};
 use tokio_proto::TcpServer;
 use tokio_service::Service;
-use std::sync::mpsc::{channel, Receiver};
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::mpsc::{channel, Sender, Receiver};
 
 #[derive(Serialize)]
 struct Message {
@@ -30,20 +28,24 @@ struct Message {
 
 struct Server {
     thread_pool: CpuPool,
-    reply_chan: Arc<Mutex<Receiver<i32>>>,
+    admin_chan: Sender<Sender<i32>>,
 }
 
 impl Service for Server {
     type Request = Request;
     type Response = Response;
     type Error = io::Error;
-    type Future = Box<Future<Item = Response, Error = io::Error>>;
+    type Future = Box<Future<Item=Response, Error=io::Error>>;
 
     fn call(&self, req: Request) -> Self::Future {
         let random_id = rand::thread_rng().gen_range(1, 5);
         let msg = self.thread_pool.spawn_fn(move || {
+            let (sender, receiver) = channel();
+
+            self.admin_chan.send(sender);
+
             Ok(Message {
-                id: self.reply_chan.lock().unwrap().recv().unwrap(),
+                id: receiver.recv().unwrap(),
                 body: String::from("hello"),
             })
         });
@@ -64,21 +66,18 @@ fn main() {
     let addr = "127.0.0.1:8080".parse().unwrap();
     let thread_pool = CpuPool::new(10);
 
-    let (sender, receiver) = channel();
-
-    let receiver = Arc::new(Mutex::new(receiver));
+    let (admin_sender, admin_receiver) = channel();
 
     let fut = thread_pool.spawn_fn(move || {
-        loop {
-            sender.send(99);
-        }
+        let sender = admin_receiver.recv().unwrap();
+        sender.send(99);
         Ok(())
     });
 
     TcpServer::new(tokio_minihttp::Http, addr).serve(move || {
         Ok(Server {
             thread_pool: thread_pool.clone(),
-            reply_chan: Arc::clone(&receiver),
+            admin_chan: admin_sender.clone(),
         })
     })
 }
